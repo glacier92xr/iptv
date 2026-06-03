@@ -28,7 +28,12 @@ jobs:
           ref: ${{ env.TARGET_SYNC_BRANCH }}
           fetch-depth: 0
 
-      # 步骤 2: 添加上游仓库远程地址
+      - name: 配置 Git 用户
+        id: config_git_user
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: 添加上游仓库远程地址
         id: add_upstream_remote
         run: |
@@ -49,7 +54,6 @@ jobs:
             echo "${{ env.TARGET_SYNC_BRANCH }} 已是最新，无需同步"
           fi
 
-      # 步骤 4: 同步上游更改并推送（跳过 workflow 文件以避免权限错误）
       - name: 同步上游更改并推送（跳过 workflow 文件）
         id: sync_upstream_changes
         if: env.need_update == 'true'
@@ -66,20 +70,23 @@ jobs:
           # 恢复 fork 专用的 workflow 文件（避免 GITHUB_TOKEN 限制导致无法推送 workflow 文件更改）
           cp -r /tmp/save-workflows/* .github/workflows/ 2>/dev/null || true
 
-          # 暂存所有更改并检查 workflow 文件是否有实际差异
-          git add -A
-          if ! git diff --cached --quiet -- '.github/workflows/'; then
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git commit -m "chore: restore fork-specific workflow files"
-            echo "=== workflow 文件已恢复 ==="
-          else
-            echo "=== workflow 文件无变化，无需恢复 ==="
-          fi
+          # 删除 workflow 目录避免被推送（稍后会单独处理）
+          rm -rf .github/workflows
 
-          # 推送 — workflow 文件无差异，因此 GITHUB_TOKEN 权限足够
+          # 暂存除 workflow 外的所有更改
+          git add -A
+
+          # 提交同步的代码更改
+          git commit -m "sync: sync code from upstream"
+          echo "=== 已提交非 workflow 文件的更改 ==="
+
+          # 推送（workflow 目录已被删除，不会被推送）
           git push --force origin ${{ env.TARGET_SYNC_BRANCH }}
           echo "=== 推送完成 ==="
+
+          # 恢复 workflow 文件到工作目录（仅本地保留）
+          cp -r /tmp/save-workflows/* .github/workflows/ 2>/dev/null || true
+          echo "=== workflow 文件已恢复到本地 ==="
 
       - name: 验证同步完成
         id: verify_sync_complete
