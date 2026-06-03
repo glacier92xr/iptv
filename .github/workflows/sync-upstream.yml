@@ -90,6 +90,7 @@ jobs:
 
       - name: 验证同步完成
         id: verify_sync_complete
+        if: success() && env.need_update == 'true'
         run: |
           UPSTREAM_COMMIT=$(git rev-parse upstream/${{ env.UPSTREAM_SYNC_BRANCH }})
           echo "当前 HEAD: $(git rev-parse HEAD)"
